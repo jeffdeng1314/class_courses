@@ -1,0 +1,378 @@
+#!/bin/bash
+
+#Name:      Hao Deng
+#Email:     dengh@oregonstate.edu
+#Github:    jeffdeng1314
+#Description: Takes in some matrix files from the user through command line and outputs matrix calculations 
+
+trap "rm -f filepath* d2u* matrix_file* adding_result* m1* m2* mean_file* t_file*;" INT TERM EXIT 
+
+
+
+
+#Description:   This function finds and displays the dimension of a matrix that the user enters
+#Input:         Takes one argument or zero if the user desires to pipe
+#Output:        Outputs the dimension of user's single matrix
+function dims(){
+
+    #Gets the input from stdin or file from the command line
+    filepath="filepath$$"
+    if [ "$#" = "0" ]
+    then
+        cat > "$filepath"
+    
+    elif [ "$#" = "1" ]
+    then
+        if [ -r $1 ]                            #Check if the file readable
+        then
+            filepath=$1
+        else
+            echo "File is not readable!" 1>&2   #File is not readable, spits out error
+            exit 1
+        fi
+    
+    fi
+
+    #Error handling for calling dims function and more than 1 argument
+    if [ $# != 1 ] && [ $# != 0 ]
+    then    
+        echo "You can only check the dimensions for ONE file" 1>&2
+        exit 1
+
+    fi
+
+    #Calculating the rows and columns using word count and prints out the dimension
+    rows=$(cat $filepath | wc -l)
+    printf "$rows "
+
+    words=$(cat $filepath | wc -w)
+    columns=`expr $words / $rows`
+
+    echo $columns
+}
+
+
+
+#Description:   This function is for adding two matrices together and outputs the matrix as a result for the user
+#Input:         Takes two arguments, two of the same dimension matrices
+#Output:        Outputs the result to the user from adding two of the same dimension matrices
+function add(){    
+
+    #Check if there are two arguments for matrices
+    if [ $# -ne 2 ]
+    then    
+        echo "You need TWO matrices to do your addition" 1>&2
+        exit 1
+
+    fi
+
+    #Check if the two files are valid
+    if [ -r $1 ] && [ -r $2 ]
+    then
+
+        #Reading the first matrix file and the second matrix file and getting their dimensions for checking
+        row1=$(cat $1 | wc -l)
+        words1=$(cat $1 | wc -w)
+        column1=$(( $words1 / $row1 ))
+
+        row2=$(cat $2 | wc -l)
+        words2=$(cat $2 | wc -w)
+        column2=$(( $words2 / $row2 ))
+
+
+        #Checking if both of the matrices' dimensions would match
+        if [ $row1 != $row2 ] || [ $column1 != $column2 ]
+        then
+            echo "The Matrices dimensions don't match" 1>&2
+            exit 1
+        fi 
+    
+    else
+        echo "At least one of your matrix file is not readable" 1>&2
+        exit 1
+    fi
+
+
+    #Assingning process-id to all the temp files that will be used in this function
+    matrix_file_1="matrix_file_1$$"
+    matrix_file_2="matrix_file_2$$"
+    adding_result="adding_result$$"
+
+    #These loops modifying the layout of the matrices so I can add the matrices easier
+    while read -r -u 5 first_line && read -r -u 6 second_line
+    do
+
+        #looping through the first file to rearrange the matrice in one vertical line
+        for num in $first_line                                          
+        do
+            echo $num >> $matrix_file_1
+            
+        done
+
+        #looping through the second file to rearrange the matrice in one vertical line
+        for num1 in $second_line                                       
+        do 
+            echo $num1 >> $matrix_file_2
+        done
+
+    done 5<$1 6<$2
+
+
+
+    #This loop does the addition with using a while loop opening two files simutaneously
+    while read -r -u 3 num_from_1 && read -r -u 4 num_from_2
+    do
+        #Adding the numbers from both files together and outputs the result to a new file
+        x=`expr $num_from_1 + $num_from_2`                              
+        echo $x >> $adding_result
+    done 3<$matrix_file_1 4<$matrix_file_2
+
+
+
+    #This loop prints the result out from the file
+    counter=0
+    while read result1
+    do        
+        #Adding a counter to be used in the if statement
+        ((counter++))
+
+        #Checks and prints out the numbers in a form that matches with the matrices' dimensions
+        if [ $(( $counter - $column1 )) -eq 0 ]
+        then
+           counter=`expr $counter - $column1`
+           printf "%d" $result1
+           echo ""
+            
+        else
+            printf "%d\t" $result1
+        fi
+
+    done <$adding_result
+
+
+}
+
+
+
+#Description:   This function is for transposing the matrix from the user's input
+#Input:         Takes one argument
+#Output:        Outputs the tranposed matrix to the user
+function transpose(){
+
+    #Checking the number of arguments
+    filepath="filepath$$"
+    if [ "$#" = "0" ]
+    then
+        cat > "$filepath"
+
+    elif [ "$#" = "1" ]
+    then    
+        #If the file is valid, reads the row and column from the matrix
+        if [ -r $1 ]
+        then
+            filepath=$1
+            row=$(cat $filepath | wc -l)
+            words=$(cat $filepath | wc -w)
+            column=`expr $words / $row`
+
+        else
+            echo "File is not readable" 1>&2
+            exit 1
+
+        fi
+
+    fi
+
+    #Error handling for calling dims function and more than 1 argument
+    if [ $# != 1 ] && [ $# != 0 ]
+    then    
+        echo "You can only transpose ONE file" 1>&2
+        exit 1
+
+    fi
+
+    #Looping through the columns and cutting them and pasting them out on the screen horizontally
+    for ((i=1;i<=$column;i++))
+    do
+        cut -f$i $filepath | paste -s 
+    done
+
+
+
+}
+
+
+#Description:   This function is for calculating the mean of a given matrix from the user
+#Input:         Takes one argument from the user
+#Output:        Outputs the mean of the matrix that the user enters
+function mean(){
+
+    #Assigning the process-id into the temp file
+    mean_file="mean_file$$"
+    filepath="filepath$$"
+
+    #Checking the number of arguments
+    if [ "$#" = "0" ]
+    then
+        cat > "$filepath"
+
+    elif [ "$#" = "1" ]
+    then    
+        #Checking if the file is valid and if so, record the rows and columns
+        if [ -r $1 ]
+        then
+            filepath=$1
+            row=$(cat $filepath | wc -l)
+            words=$(cat $filepath | wc -w)
+            column=`expr $words / $row`
+
+        else
+            echo "File is not readable" 1>&2
+            exit 1
+
+        fi
+
+    fi
+
+    #Error handling for calling dims function and more than 1 argument
+    if [ $# != 1 ] && [ $# != 0 ]
+    then    
+        echo "You can only check the mean for ONE file" 1>&2
+        exit 1
+
+    fi
+
+    #Using a for-loop to go through the file and cuts the columns using similar techniques from transposing
+    for ((i=1;i<=$column;i++))
+    do
+        #Making a counter for adding the numbers together
+        counting=0
+
+        #Cutting the columns and putting them into the temp file
+        cut -f$i $1 > $mean_file
+
+        #This while loop is for reading the temp file and adding the numbers together
+        while read -r num
+        do
+            counting=$(( $counting + $num ))
+
+        done <$mean_file
+
+
+        #This is the formula for calculating the mean. This formula is from the program1 hints
+        x=$(( ($counting + ($row/2)*( ($counting>0)*2-1 )) / $row ))
+        
+
+        #This is the checking statement for printing out the results in a designated layout
+        if [ $i -eq $column ]
+        then
+            printf "%d" $x
+            echo ""  
+        else
+            printf "%d\t" $x
+        fi
+
+
+    done
+
+}
+
+
+#Description:   This function is for multiplying the two matrices together and prints out the result to the user
+#Input:         Takes two arguments from the user
+#Output:        Outputs the result to the user after multiplying two matrices
+function multiply(){
+
+    #Assigning the process-id to the temp file
+    t_file="t_file$$"
+
+    # #Check if there are two arguments for matrices
+    if [ $# -ne 2 ]
+    then    
+        echo "You need TWO matrices to do your multiplication" 1>&2
+        exit 1
+
+    fi
+
+    #Check if both of these files are valid
+    if [ -r $1 ] && [ -r $2 ]
+    then
+
+        #Reading the first matrix file and the second matrix file and getting their dimensions for checking
+        row1=$(cat $1 | wc -l)
+        words1=$(cat $1 | wc -w)
+        column1=$(( $words1 / $row1 ))
+
+
+        row2=$(cat $2 | wc -l)
+        words2=$(cat $2 | wc -w)
+        column2=$(( $words2 / $row2 ))
+
+        #If the column dimension from the first matrix does not match the row dimension from the second matrix, then prints out error
+        if [ $column1 != $row2 ]
+        then
+            echo "The Matrices dimensions don't match" 1>&2
+            exit 1
+        fi 
+    
+    else
+        echo "At least one of your matrix file is not readable" 1>&2
+        exit 1
+    fi
+
+
+    #Transposing the first matrix into the temp file so it'll be easier to do the multiplication later
+    transpose $1 >> $t_file
+    
+
+    #Assigning process-ids into these two temp files
+    m1="m1$$"
+    m2="m2$$"
+
+
+    #Since the first matrix has been tranposed(rows and columns variables will be switched), this for-loop is for going through the columns in the first matrix
+    for ((i=1;i<=$row1;i++))
+    do
+        #Cutting the columns and outputing to the m1 temp file
+        cut -f$i $t_file > $m1
+
+        #This for-loop is going through the second matrix file
+        for ((j=1;j<=$column2;j++))
+        do
+            #Making a counter and cutting the columns and outputing to the m2 temp file
+            cut -f$j $2 > $m2
+            num_result=0
+            
+            #Using a while loop to read both m1 and m2 temp files simutaneously 
+            while read -r -u 5 m1_col && read -r -u 6 m2_col
+            do
+
+                #Multiplying the corresponding numbers together and add them
+                mul=$((m1_col * m2_col))
+                num_result=`expr $num_result + $mul`
+
+            done 5<$m1 6<$m2
+
+
+            #This condition is for printing the resulting matrix in a correct dimension form
+            if [ $j == $column2 ]
+            then
+                printf "%d" $num_result
+                echo ""
+            else
+                printf "%d\t" $num_result
+            fi
+
+
+        done
+
+    done
+
+
+
+
+}
+
+ 
+#This is for looking the first argument and calls the function from the corresponding user input along with passing the rest of the arguments
+$1 "${@:2}"
