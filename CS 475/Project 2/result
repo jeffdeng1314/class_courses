@@ -1,0 +1,13 @@
+#!/bin/csh
+
+#number of threads
+foreach t ( 1 2 4 8 16 )
+	echo NUMT = $t
+	echo "thread    |  megaHeights/Sec  |   volume" >> viewResults.txt
+	foreach nodes ( 16 32 64 128 256 512 1024 2048)
+		echo NUMNODES = $nodes
+		g++ -DNUMT=$t -DNUMNODES=$nodes main.cpp -o main -lm -fopenmp
+		./main >> viewResults.txt
+        echo >> viewResults.txt
+	end
+end
